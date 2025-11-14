@@ -193,6 +193,24 @@ def load_model_and_scaler():
 inference_q = queue.Queue(maxsize=512)
 inference_stop = threading.Event()
 
+# Latest inference results (in-memory, thread-safe)
+inference_results = {}
+inference_results_lock = threading.Lock()
+
+def infer_summary_str(sensor_type):
+    with inference_results_lock:
+        r = inference_results.get(sensor_type)
+    if not r:
+        return ""
+    s_score = r.get("score")
+    s_label = r.get("label")
+    try:
+        score_s = f"{float(s_score):.4f}"
+    except Exception:
+        score_s = "n/a"
+    label_s = str(s_label) if s_label is not None else "n/a"
+    return f"  [INF] score={score_s} label={label_s}"
+
 def inference_worker(client, model, scaler, stop_event):
     while not stop_event.is_set():
         try:
@@ -235,6 +253,16 @@ def inference_worker(client, model, scaler, stop_event):
             base_topic = topic_for_type(sensor_type)
             out_topic = f"{base_topic}/inference" if base_topic else None
             if out_topic:
+                # record latest inference in-memory for display
+                try:
+                    with inference_results_lock:
+                        inference_results[sensor_type] = {
+                            "score": result_score,
+                            "label": result_label,
+                            "timestamp_ns": now_ns()
+                        }
+                except Exception:
+                    pass
                 # publish inference result (use memory buffer on failure)
                 buffer_publish(client, out_topic, payload)
                 # Also print inference summary to stdout for visibility
@@ -621,11 +649,12 @@ def main():
         if now - last_display >= DISPLAY_REFRESH:
             sys.stdout.write("\033[H\033[J")
             print("=== MOBY Edge Sensor Monitor (Live) ===\n")
-            print(last_line["dht11"])
-            print(last_line["vibration"])
-            print(last_line["sound"])
-            print(last_line["accel_gyro"])
-            print(last_line["pressure"])
+            # Print sensor lines with latest inference summaries (if any)
+            print(last_line["dht11"] + infer_summary_str("dht11"))
+            print(last_line["vibration"] + infer_summary_str("vibration"))
+            print(last_line["sound"] + infer_summary_str("sound"))
+            print(last_line["accel_gyro"] + infer_summary_str("accel_gyro"))
+            print(last_line["pressure"] + infer_summary_str("pressure"))
             print("\nTime: {}".format(time.strftime("%H:%M:%S")))
             sys.stdout.flush()
             last_display = now
