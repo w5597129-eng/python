@@ -153,8 +153,13 @@ def topic_for_type(sensor_type):
 # ==============================
 # Model / Inference (async worker)
 # ==============================
-MODEL_PATH = "models/isolation_forest.pkl"
-SCALER_PATH = "models/scaler_if.pkl"
+_DEFAULT_MODEL_PATH = "models/isolation_forest.pkl"
+_DEFAULT_SCALER_PATH = "models/scaler_if.pkl"
+_RESAVED_MODEL_PATH = "models/resaved_isolation_forest.joblib"
+_RESAVED_SCALER_PATH = "models/resaved_scaler.joblib"
+# Prefer resaved joblib files if present (created by scripts/resave_models.py)
+MODEL_PATH = _RESAVED_MODEL_PATH if os.path.exists(_RESAVED_MODEL_PATH) else _DEFAULT_MODEL_PATH
+SCALER_PATH = _RESAVED_SCALER_PATH if os.path.exists(_RESAVED_SCALER_PATH) else _DEFAULT_SCALER_PATH
 
 def load_model_and_scaler():
     model = None
