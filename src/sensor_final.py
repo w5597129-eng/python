@@ -316,6 +316,27 @@ signal.signal(signal.SIGTERM, handle_stop)
 # ==============================
 # Init devices
 # ==============================
+
+def _make_mqtt_client(client_id):
+    """Create a paho.mqtt.client.Client with fallbacks for different
+    paho-mqtt versions. Some installations expect a `callback_api_version`
+    parameter or have different constructor signatures; try sensible
+    fallbacks and raise the original error if all fail.
+    """
+    try:
+        return mqtt.Client(client_id=client_id)
+    except Exception as e:
+        # Try explicit callback_api_version for mismatched callback API
+        try:
+            return mqtt.Client(client_id=client_id, callback_api_version=1)
+        except Exception:
+            # Try specifying protocol explicitly as a last resort
+            try:
+                return mqtt.Client(client_id=client_id, userdata=None, protocol=mqtt.MQTTv311)
+            except Exception:
+                # Re-raise the original exception for visibility
+                raise e
+
 def init_ads():
     i2c = busio.I2C(board.SCL, board.SDA)
     ads = ADS1115(i2c, address=ADS_ADDR)
@@ -370,7 +391,7 @@ def now_ns():
 def main():
     # 루프 시작 시 버퍼 자동 재전송
     ensure_buffer_dir()
-    client = mqtt.Client("sensor_pub_all")
+    client = _make_mqtt_client("sensor_pub_all")
     client.connect(BROKER, PORT, 60)
     client.loop_start()
     resend_buffered(client)

@@ -1,0 +1,18 @@
+# Minimal requirements for running sensor_final in a controlled venv
+
+numpy
+scipy
+pandas
+joblib
+paho-mqtt
+PyYAML
+# Use scikit-learn 1.7.2 to match models' training environment
+scikit-learn==1.7.2
+
+# Optional/hardware-specific (install on Raspberry Pi if needed):
+adafruit-blinka
+adafruit-circuitpython-dht
+adafruit-circuitpython-ads1x15
+smbus2
+RPi.GPIO
+Adafruit-BMP
