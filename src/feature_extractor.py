@@ -24,7 +24,7 @@ SENSOR_FIELDS = [
 # 주파수 도메인 사용 여부
 # - True: 시간 도메인(5개) + 주파수 도메인(6개) = 11개 특징/축
 # - False: 시간 도메인(5개) = 5개 특징/축
-USE_FREQUENCY_DOMAIN = False
+USE_FREQUENCY_DOMAIN = True
 
 # 윈도우 설정
 WINDOW_SIZE = 5.0  # 초 단위 (1개 데이터셋 = 5초)

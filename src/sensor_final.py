@@ -41,7 +41,7 @@ SENSOR_FIELDS = [
 ]
 
 # Use frequency-domain features (time-domain:5, freq-domain extra:6 per axis)
-USE_FREQUENCY_DOMAIN = False
+USE_FREQUENCY_DOMAIN = True
 
 # Window size in seconds (used to size ring buffers)
 WINDOW_SIZE = 5.0
