@@ -487,23 +487,21 @@ def main():
         # ---------- DHT11 ----------
         if now - last_dht >= INTERVAL_DHT:
             try:
-                t = dht.temperature
+                # Only read humidity from DHT11 as requested
                 h = dht.humidity
-                if (t is not None) and (h is not None):
-                    temperature_c    = round(float(t), 1)
+                if h is not None:
                     humidity_percent = round(float(h), 1)
                     payload = {
                         "sensor_type": "dht11",
                         "sensor_model": "DHT11",
                         "fields": {
-                            "temperature_c":    temperature_c,
                             "humidity_percent": humidity_percent
                         },
                         "timestamp_ns": now_ns()
                     }
                     # publish (use memory buffer on failure)
                     buffer_publish(client, TOPIC_DHT, payload)
-                    last_line["dht11"] = "DHT11     | T={:4.1f}C  H={:4.1f}%".format(temperature_c, humidity_percent)
+                    last_line["dht11"] = "DHT11     | H={:4.1f}%".format(humidity_percent)
             except Exception as e:
                 last_line["dht11"] = "DHT11     | Error: {}".format(e)
             last_dht = now
