@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
 Feature Extraction from Sensor Data (InfluxDB Format)
-Version 14 (Fixed):
+Version 15 (Fixed):
 - Handles multi-file CSV format
 - Configurable sensor field selection
 - Window-based feature extraction only
 - FIXED: Multi-sensor synchronization using outer join
+- FIXED: Prevent NaN [*_SpectralKurtosis, *_SpectralSkewness]
 
 Author: WISE Team, Project MOBY
-Date: 2025-11-18
+Date: 2025-11-19
 """
 
 import os
@@ -124,7 +125,7 @@ def read_influxdb_csv(file_path: str) -> Tuple[pd.DataFrame, float]:
     return df_pivot, sampling_rate
 
 # =====================================
-# 특징 추출 함수 (노트북과 동일)
+# 특징 추출 함수
 # =====================================
 
 def extract_features(signal: np.ndarray, sampling_rate: float,
@@ -141,6 +142,11 @@ def extract_features(signal: np.ndarray, sampling_rate: float,
     - features: 추출된 특징 리스트
       * 시간 도메인 (5개): STD, Peak-to-Peak, Crest Factor, Impulse Factor, Mean
       * 주파수 도메인 (6개, 선택적): Dominant Freq, Spectral Centroid, Energy, Kurtosis, Skewness, Std
+    
+    Note:
+    - NaN 방지 처리 포함:
+      * SpectralKurtosis: NaN → 3.0 (정규분포의 kurtosis)
+      * SpectralSkewness: NaN → 0.0 (대칭 분포의 skewness)
     """
     if len(signal) < 2:
         feature_count = 11 if use_freq_domain else 5
@@ -193,8 +199,18 @@ def extract_features(signal: np.ndarray, sampling_rate: float,
     spectral_energy = np.sum(spectrum ** 2)
     
     # Spectral statistics
-    spectral_kurt = kurtosis(spectrum, fisher=False) if len(spectrum) > 1 else 0
-    spectral_skewness = skew(spectrum) if len(spectrum) > 1 else 0
+    # NaN 방지: 스펙트럼이 너무 짧거나 균일하면 기본값 사용
+    if len(spectrum) > 1:
+        spectral_kurt = kurtosis(spectrum, fisher=False)
+        spectral_skewness = skew(spectrum)
+        
+        # NaN 체크 및 기본값 설정
+        spectral_kurt = 3.0 if np.isnan(spectral_kurt) else spectral_kurt
+        spectral_skewness = 0.0 if np.isnan(spectral_skewness) else spectral_skewness
+    else:
+        spectral_kurt = 3.0  # 정규분포의 kurtosis
+        spectral_skewness = 0.0  # 대칭 분포의 skewness
+    
     spectral_std = np.std(spectrum)
     
     freq_features = [
@@ -391,6 +407,6 @@ if __name__ == "__main__":
         )
         
         if not features.empty:
-            output_path = os.path.join(OUTPUT_DIR, "1118_features.csv")
+            output_path = os.path.join(OUTPUT_DIR, "1118_features_fluctuating.csv")
             features.to_csv(output_path, index=False)
             print(f"\nSaved to: {output_path}")
