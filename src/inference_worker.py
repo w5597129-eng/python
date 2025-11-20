@@ -12,6 +12,12 @@ import joblib
 import numpy as np
 from scipy.fft import rfft, rfftfreq
 from scipy.stats import kurtosis, skew
+try:
+    # Prefer the canonical feature implementation from feature_extractor
+    from feature_extractor import extract_features
+except Exception:
+    # fallback: local implementation will be used (defined below if necessary)
+    extract_features = None
 import paho.mqtt.client as mqtt
 import torch
 import torch.nn as nn
@@ -161,45 +167,50 @@ def _make_mqtt_client(client_id: str) -> mqtt.Client:
                 raise e
 
 
-def extract_features(signal: Iterable[float], sampling_rate: float, use_freq_domain: bool = USE_FREQUENCY_DOMAIN) -> list:
-    signal = np.asarray(list(signal), dtype=float)
-    if signal.size < 2:
-        feature_count = 11 if use_freq_domain else 5
-        return [0.0] * feature_count
+if extract_features is None:
+    # As a safety net, define a local copy compatible with feature_extractor's API.
+    def extract_features(signal: Iterable[float], sampling_rate: float, use_freq_domain: bool = USE_FREQUENCY_DOMAIN) -> list:
+        signal = np.asarray(list(signal), dtype=float)
+        if signal.size < 2:
+            feature_count = 11 if use_freq_domain else 5
+            return [0.0] * feature_count
 
-    abs_signal = np.abs(signal)
-    max_val = float(np.max(abs_signal))
-    abs_mean = float(np.mean(abs_signal))
-    std = float(np.std(signal))
-    peak_to_peak = float(np.ptp(signal))
-    rms = float(np.sqrt(np.mean(signal ** 2)))
-    crest_factor = max_val / rms if rms > 0 else 0.0
-    impulse_factor = max_val / abs_mean if abs_mean > 0 else 0.0
-    mean_val = float(np.mean(signal))
-    time_features = [std, peak_to_peak, crest_factor, impulse_factor, mean_val]
+        abs_signal = np.abs(signal)
+        max_val = float(np.max(abs_signal))
+        abs_mean = float(np.mean(abs_signal))
+        std = float(np.std(signal))
+        peak_to_peak = float(np.ptp(signal))
+        rms = float(np.sqrt(np.mean(signal ** 2)))
+        crest_factor = max_val / rms if rms > 0 else 0.0
+        impulse_factor = max_val / abs_mean if abs_mean > 0 else 0.0
+        mean_val = float(np.mean(signal))
+        time_features = [std, peak_to_peak, crest_factor, impulse_factor, mean_val]
 
-    if not use_freq_domain:
-        return time_features
+        if not use_freq_domain:
+            return time_features
 
-    signal_centered = signal - np.mean(signal)
-    spectrum = np.abs(rfft(signal_centered))
-    freqs = rfftfreq(signal.size, 1.0 / sampling_rate) if signal.size > 0 else np.array([0.0])
-    dominant_freq = float(freqs[np.argmax(spectrum)]) if spectrum.size > 0 else 0.0
-    spectral_sum = float(np.sum(spectrum))
-    spectral_centroid = float(np.sum(freqs * spectrum) / spectral_sum) if spectral_sum > 0 else 0.0
-    spectral_energy = float(np.sum(spectrum ** 2))
-    spectral_kurt = float(kurtosis(spectrum, fisher=False)) if spectrum.size > 1 else 0.0
-    spectral_skewness = float(skew(spectrum)) if spectrum.size > 1 else 0.0
-    spectral_std = float(np.std(spectrum))
-    freq_features = [
-        dominant_freq,
-        spectral_centroid,
-        spectral_energy,
-        spectral_kurt,
-        spectral_skewness,
-        spectral_std,
-    ]
-    return time_features + freq_features
+        signal_centered = signal - np.mean(signal)
+        spectrum = np.abs(rfft(signal_centered))
+        freqs = rfftfreq(signal.size, 1.0 / sampling_rate) if signal.size > 0 else np.array([0.0])
+        dominant_freq = float(freqs[np.argmax(spectrum)]) if spectrum.size > 0 else 0.0
+        spectral_sum = float(np.sum(spectrum))
+        spectral_centroid = float(np.sum(freqs * spectrum) / spectral_sum) if spectral_sum > 0 else 0.0
+        spectral_energy = float(np.sum(spectrum ** 2))
+        # Use safe defaults to avoid NaN as in feature_extractor
+        spectral_kurt = float(kurtosis(spectrum, fisher=False)) if spectrum.size > 1 else 3.0
+        spectral_skewness = float(skew(spectrum)) if spectrum.size > 1 else 0.0
+        spectral_kurt = 3.0 if np.isnan(spectral_kurt) else spectral_kurt
+        spectral_skewness = 0.0 if np.isnan(spectral_skewness) else spectral_skewness
+        spectral_std = float(np.std(spectrum))
+        freq_features = [
+            dominant_freq,
+            spectral_centroid,
+            spectral_energy,
+            spectral_kurt,
+            spectral_skewness,
+            spectral_std,
+        ]
+        return time_features + freq_features
 FEATURE_PIPELINES: Dict[str, Callable[[np.ndarray], np.ndarray]] = {}
 
 
