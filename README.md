@@ -58,6 +58,36 @@ mosquitto_sub -h localhost -t "factory/inference/windows/#" -v
 mosquitto_sub -h localhost -t "factory/inference/results/#" -v
 ```
 
+**최근 변경 및 주의사항**
+- `src/inference_worker.py`의 ONNX 래퍼(`ONNXMLPWrapper`)가 기본적으로 CPU 실행 프로바이더(`CPUExecutionProvider`)를 사용하도록 변경되었습니다. GPU가 없는 시스템에서 ONNX Runtime의 GPU 디바이스 탐지로 인한 경고 메시지(GPU device discovery failed)를 억제하기 위한 조치입니다. GPU를 사용하려면 코드에서 명시적으로 providers를 설정하거나 환경에 맞는 onnxruntime 패키지를 설치하세요.
+- `motor.py` 및 `motor_slow.py`는 IR 이벤트를 MQTT로 발행할 때 터미널에 발행 내용을 로그로 출력하도록 변경되었습니다. 따라서 실제 하드웨어 신호(또는 테스트로 `record_hit(now_ns())` 호출)를 트리거하면 터미널에서 `[MQTT PUBLISH] topic=... payload=...` 형식의 로그를 볼 수 있습니다.
+- 이전에 존재하던 1초 단위의 주기적 상태 출력(phase/uptime 등)은 제거되어, 상태는 MQTT 발행이 있을 때만 터미널에 표시됩니다. 원하면 다시 주기 출력 또는 enable flag를 추가해 드릴 수 있습니다.
+
+검증/실행 팁
+- 가상환경 활성화(권장):
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+- 의존성 설치:
+```bash
+pip install -r requirements.txt
+# 하드웨어 전용 의존성만 설치하려면:
+pip install -r requirements-hw.txt
+```
+- `motor` 스크립트 동작 확인 (IR 이벤트가 있을 때 터미널에 publish 로그가 찍힙니다):
+```bash
+source .venv/bin/activate
+python motor_slow.py
+# 또는
+python motor.py
+```
+- 로컬 MQTT 브로커가 없다면 `mosquitto`를 설치해서 테스트하면 편합니다(위의 토픽 수신 예시 참고).
+
+문제 해결
+- ONNX Runtime이 GPU를 탐지하며 나오는 경고를 제거하기 위해 워커는 기본적으로 CPU 실행 프로바이더를 사용합니다. GPU 가속을 원하면 `onnxruntime-gpu`를 설치하거나 `ONNXMLPWrapper(..., providers=["CUDAExecutionProvider"])`처럼 명시적으로 providers를 지정하세요.
+- 하드웨어가 없는 로컬 개발 환경에서는 센서 드라이버 import가 실패할 수 있습니다. 이 경우 예외 분기나 도커/모킹을 이용해 테스트하세요.
+
 모델/스케일러 파일
 - 워커는 기본적으로 `models/isolation_forest.joblib` 및 `models/scaler_if.joblib` 같은 파일을 찾습니다. 상대 경로는 리포지토리 루트를 기준으로 해석되므로 `cd /home/wise/python`에서 실행하세요.
 - 모델이 현재 환경에서 로드되지 않으면 `scripts/resave_models.py`로 재저장하거나, 필요한 라이브러리(scikit-learn 등)를 venv에 맞게 설치해야 합니다.
