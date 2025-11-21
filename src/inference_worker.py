@@ -186,7 +186,11 @@ class ONNXMLPWrapper:
             raise RuntimeError("onnxruntime not available; install onnxruntime to use ONNX models")
         self.onnx_path = onnx_path
         opts = {}
-        self.session = ort.InferenceSession(onnx_path, providers=providers or None)
+        # If no explicit providers are given, prefer CPUExecutionProvider to
+        # avoid attempting GPU device discovery on systems without GPU support
+        # (which causes noisy warnings like: "GPU device discovery failed").
+        chosen_providers = providers if providers is not None else ["CPUExecutionProvider"]
+        self.session = ort.InferenceSession(onnx_path, providers=chosen_providers)
         # Determine input name
         self.input_name = self.session.get_inputs()[0].name
         self.output_name = self.session.get_outputs()[0].name
@@ -367,7 +371,11 @@ class ModelRunner:
                 except Exception as exc:
                     print(f"Failed to construct Torch MLP from checkpoint: {exc}")
                     self.model = loaded_model
-            elif isinstance(loaded_model, nn.Module):
+            # Only attempt to treat loaded_model as a torch.nn.Module if torch
+            # (and therefore `nn`) was successfully imported. When `nn` is
+            # None, `isinstance(..., nn.Module)` would raise AttributeError,
+            # so guard the check accordingly.
+            elif nn is not None and isinstance(loaded_model, nn.Module):
                 self.model = TorchMLPWrapper(loaded_model)
             else:
                 self.model = loaded_model

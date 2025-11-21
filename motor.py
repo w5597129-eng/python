@@ -16,8 +16,8 @@ AIN2 = 22
 PWMA = 18
 STBY = 23
 
-PWM_FREQ = 75     # Hz
-DUTY = 100          # 0..100 (%), set your steady speed here
+PWM_FREQ = 100     # Hz
+DUTY = 75          # 0..100 (%), set your steady speed here
 
 stop_flag = False
 # -----------------------------
@@ -52,6 +52,12 @@ def init_mqtt():
         mqtt_client = None
 
 def _publish_ir(msg: dict):
+    # Log the outgoing MQTT payload to the terminal so users can see publishes
+    try:
+        print(f"[MQTT PUBLISH] topic={MQTT_TOPIC} payload={json.dumps(msg)}")
+    except Exception:
+        print("[MQTT PUBLISH] (could not serialize msg)")
+
     if mqtt_client:
         try:
             mqtt_client.publish(MQTT_TOPIC, json.dumps(msg))
