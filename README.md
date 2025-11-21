@@ -6,7 +6,10 @@
 핵심 파일/위치
 - `src/sensor_final.py` : 통합 센서 퍼블리셔 및 터미널 출력(하드웨어 필요).
 - `src/inference_interface.py` : 센서 퍼블리셔와 워커가 공유하는 메시지/토픽 스키마(라이브러리 모듈, 실행 불필요).
-- `src/inference_worker.py` : MQTT로 윈도우를 구독해 모델을 실행하고 결과를 퍼블리시하는 독립 실행형 워커.
+- `src/inference_worker.py` : MQTT로 윈도우를 구독해 특징 추출 → 스케일링 → 모델 추론을 수행하고 결과를 퍼블리시하는 워커.
+- `src/feature_extractor.py` : 실제 특징 추출 구현(V17, PCA + 벡터 스칼라화). 멀티센서 파일 처리 및 윈도우 기반 피처 추출 제공.
+- `feature_extractor.py` : 루트에 둔 경량 호환 래퍼로, `src.feature_extractor`를 재수출하여 `import feature_extractor` 호출을 지원함.
+- `src/__init__.py` : `src`를 패키지로 만들어 임포트 호환성을 보장합니다.
 - `models/` : 학습된 모델·스케일러 파일 (예: `isolation_forest.joblib`, `scaler_if.joblib`).
 - `scripts/resave_models.py` : 기존 모델/스케일러를 로드해 joblib로 재저장하는 편리한 스크립트.
 
@@ -59,9 +62,10 @@ mosquitto_sub -h localhost -t "factory/inference/results/#" -v
 ```
 
 **최근 변경 및 주의사항**
-- `src/inference_worker.py`의 ONNX 래퍼(`ONNXMLPWrapper`)가 기본적으로 CPU 실행 프로바이더(`CPUExecutionProvider`)를 사용하도록 변경되었습니다. GPU가 없는 시스템에서 ONNX Runtime의 GPU 디바이스 탐지로 인한 경고 메시지(GPU device discovery failed)를 억제하기 위한 조치입니다. GPU를 사용하려면 코드에서 명시적으로 providers를 설정하거나 환경에 맞는 onnxruntime 패키지를 설치하세요.
-- `motor.py` 및 `motor_slow.py`는 IR 이벤트를 MQTT로 발행할 때 터미널에 발행 내용을 로그로 출력하도록 변경되었습니다. 따라서 실제 하드웨어 신호(또는 테스트로 `record_hit(now_ns())` 호출)를 트리거하면 터미널에서 `[MQTT PUBLISH] topic=... payload=...` 형식의 로그를 볼 수 있습니다.
-- 이전에 존재하던 1초 단위의 주기적 상태 출력(phase/uptime 등)은 제거되어, 상태는 MQTT 발행이 있을 때만 터미널에 표시됩니다. 원하면 다시 주기 출력 또는 enable flag를 추가해 드릴 수 있습니다.
+- `feature_extractor` 개선: 특징 추출기가 `src/feature_extractor.py`의 V17 구현(PC A + 벡터 스칼라화, FFT 재사용)을 기준으로 갱신되었습니다. 이를 위해 루트에 경량 래퍼 `feature_extractor.py`를 추가했고 `src`를 패키지로 만들었습니다.
+- `src/inference_worker.py`는 가능하면 `feature_extractor.extract_features_v17`를 사용해 센서-레벨(예: accel 3축, gyro 3축, pressure) 특징을 직접 추출하도록 변경되었습니다. 추출기가 사용 불가할 경우 기존의 1D 신호 기반 `extract_features` 폴백을 사용합니다.
+- ONNX 관련: `ONNXMLPWrapper`는 기본적으로 CPU 실행 프로바이더(`CPUExecutionProvider`)를 사용합니다. GPU를 사용하려면 `onnxruntime-gpu` 설치 또는 `providers` 명시를 해주세요.
+- 모델 호환성 주의: V17 피처 집합(특성 이름/순서/길이)이 기존 모델의 입력 차원과 다를 수 있습니다. 기존 모델/스케일러는 새 피처 순서에 맞춰 재저장하거나(권장) 모델을 재학습해야 할 수 있습니다. `scripts/resave_models.py`로 스케일러를 재저장해 보고 모델 입력 차원을 확인하세요.
 
 검증/실행 팁
 - 가상환경 활성화(권장):
