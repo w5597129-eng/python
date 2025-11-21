@@ -460,11 +460,15 @@ class InferenceEngine:
         feats = []
         for field in SENSOR_FIELDS:
             sig = window_msg.window_fields.get(field)
-            if not sig or len(sig) < 2:
+            # Normalize incoming signal to numpy array to avoid type errors
+            # (some publishers may send Python lists which don't support
+            # elementwise operations like `signal ** 2` in feature_extractor).
+            arr = np.asarray(sig, dtype=float) if sig is not None else np.asarray([])
+            if arr.size < 2:
                 feat_len = 11 if USE_FREQUENCY_DOMAIN else 5
                 feats.extend([0.0] * feat_len)
             else:
-                feats.extend(extract_features(sig, window_msg.sampling_rate_hz, USE_FREQUENCY_DOMAIN))
+                feats.extend(extract_features(arr, window_msg.sampling_rate_hz, USE_FREQUENCY_DOMAIN))
         return np.asarray(feats, dtype=float).reshape(1, -1)
 
     def process_window(self, window_msg: WindowMessage) -> List[InferenceResultMessage]:
