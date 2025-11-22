@@ -65,7 +65,7 @@ mosquitto_sub -h localhost -t "factory/inference/results/#" -v
 - `feature_extractor` 개선: 특징 추출기가 `src/feature_extractor.py`의 V17 구현(PC A + 벡터 스칼라화, FFT 재사용)을 기준으로 갱신되었습니다. 이를 위해 루트에 경량 래퍼 `feature_extractor.py`를 추가했고 `src`를 패키지로 만들었습니다.
 - `src/inference_worker.py`는 가능하면 `feature_extractor.extract_features_v17`를 사용해 센서-레벨(예: accel 3축, gyro 3축, pressure) 특징을 직접 추출하도록 변경되었습니다. 추출기가 사용 불가할 경우 기존의 1D 신호 기반 `extract_features` 폴백을 사용합니다.
 - ONNX 관련: `ONNXMLPWrapper`는 기본적으로 CPU 실행 프로바이더(`CPUExecutionProvider`)를 사용합니다. GPU를 사용하려면 `onnxruntime-gpu` 설치 또는 `providers` 명시를 해주세요.
-- 모델 호환성 주의: V17 피처 집합(특성 이름/순서/길이)이 기존 모델의 입력 차원과 다를 수 있습니다. 기존 모델/스케일러는 새 피처 순서에 맞춰 재저장하거나(권장) 모델을 재학습해야 할 수 있습니다. `scripts/resave_models.py`로 스케일러를 재저장해 보고 모델 입력 차원을 확인하세요.
+- 모델 호환성 주의: V17 피처 집합(특성 이름/순서/길이)이 기존 모델의 입력 차원과 다를 수 있습니다. 저장된 PyTorch 체크포인트(`.pth/.pt`)는 이 저장소의 기본 워커에서 자동 변환되지 않으므로, ONNX로 변환하거나 모델을 재학습/재저장하는 것을 권장합니다. `scripts/resave_models.py`로 스케일러를 재저장해 보고 모델 입력 차원을 확인하세요.
 
 검증/실행 팁
 - 가상환경 활성화(권장):

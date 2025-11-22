@@ -18,12 +18,6 @@ from scipy.stats import kurtosis, skew
 
 import paho.mqtt.client as mqtt
 try:
-    import torch
-    import torch.nn as nn
-except Exception:
-    torch = None
-    nn = None
-try:
     import onnxruntime as ort
 except Exception:
     ort = None
@@ -87,8 +81,6 @@ DEFAULT_MODEL_CONFIGS: List[ModelConfig] = [
         sensor_type="accel_gyro",
         model_path=_resolve_path(
             "models/mlp_classifier.onnx",
-            "models/mlp_classifier.pth",
-            "models/mlp_classifier.pt",
         ),
         scaler_path=_resolve_path(
             "models/scaler_mlp.pkl",
@@ -102,61 +94,7 @@ DEFAULT_MODEL_CONFIGS: List[ModelConfig] = [
 ]
 
 
-if nn is not None:
-    class MLPClassifier(nn.Module):
-        def __init__(self, input_size, hidden_sizes=(64, 32), output_size=2):
-            super(MLPClassifier, self).__init__()
-            self.fc1 = nn.Linear(input_size, hidden_sizes[0])
-            self.fc2 = nn.Linear(hidden_sizes[0], hidden_sizes[1])
-            self.fc3 = nn.Linear(hidden_sizes[1], output_size)
-            self.relu = nn.ReLU()
-            self.sigmoid = nn.Sigmoid()
-
-        def forward(self, x):
-            x = self.relu(self.fc1(x))
-            x = self.relu(self.fc2(x))
-            x = self.sigmoid(self.fc3(x))
-            return x
-
-    class TorchMLPWrapper:
-        def __init__(self, model: Any, device: Optional[Any] = None):
-            self.device = device or (torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu"))
-            self.model = model.to(self.device)
-            self.model.eval()
-
-        def _predict_proba(self, X: np.ndarray) -> np.ndarray:
-            if X is None:
-                return np.zeros((0, 2))
-            with torch.no_grad():
-                tx = torch.from_numpy(np.asarray(X, dtype=np.float32)).to(self.device)
-                if tx.dim() == 1:
-                    tx = tx.unsqueeze(0)
-                out = self.model(tx)
-                proba = out.cpu().numpy()
-            return proba
-
-        def score_samples(self, X: np.ndarray) -> np.ndarray:
-            proba = self._predict_proba(X)
-            if proba.size == 0:
-                return np.array([])
-            mag = np.linalg.norm(proba, axis=1)
-            return mag
-
-        def predict(self, X: np.ndarray) -> np.ndarray:
-            proba = self._predict_proba(X)
-            if proba.size == 0:
-                return np.array([])
-            binvec = (proba > 0.5).astype(int)
-            labels = np.any(binvec, axis=1).astype(int)
-            return labels
-else:
-    class MLPClassifier:
-        def __init__(self, *args, **kwargs):
-            raise RuntimeError("PyTorch is not installed.")
-
-    class TorchMLPWrapper:
-        def __init__(self, *args, **kwargs):
-            raise RuntimeError("PyTorch is not installed.")
+# PyTorch support removed: project uses ONNX / joblib/pickle models only.
 
 
 class ONNXMLPWrapper:
@@ -316,29 +254,8 @@ class ModelRunner:
         else:
             loaded_model = _load_artifact(self.config.model_path)
         if loaded_model is not None:
-            if isinstance(loaded_model, dict) and "model_state_dict" in loaded_model:
-                try:
-                    input_size = loaded_model.get("input_size")
-                    hidden_sizes = loaded_model.get("hidden_sizes", (64, 32))
-                    output_size = loaded_model.get("output_size", 2)
-                    if input_size is None:
-                        for k, v in loaded_model["model_state_dict"].items():
-                            if k.endswith(".weight") and v is not None:
-                                input_size = v.shape[1]
-                                break
-                    model = MLPClassifier(input_size, hidden_sizes, output_size)
-                    try:
-                        model.load_state_dict(loaded_model["model_state_dict"])
-                    except Exception:
-                        pass
-                    self.model = TorchMLPWrapper(model)
-                except Exception as exc:
-                    print(f"Failed to construct Torch MLP from checkpoint: {exc}")
-                    self.model = loaded_model
-            elif nn is not None and isinstance(loaded_model, nn.Module):
-                self.model = TorchMLPWrapper(loaded_model)
-            else:
-                self.model = loaded_model
+            # Loaded artifact is used directly. PyTorch checkpoint handling removed.
+            self.model = loaded_model
         loaded_scaler = _load_artifact(self.config.scaler_path)
         if loaded_scaler is not None:
             self.scaler = loaded_scaler
